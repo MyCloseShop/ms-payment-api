@@ -1,0 +1,81 @@
+# Comments are provided throughout this file to help you get started.
+# If you need more help, visit the Docker Compose reference guide at
+# https://docs.docker.com/go/compose-spec-reference/
+
+# Here the instructions define your application as a service called "server".
+# This service is built from the Dockerfile in the current directory.
+# You can add other services your application may depend on here, such as a
+# database or a cache. For examples, see the Awesome Compose repository:
+# https://github.com/docker/awesome-compose
+services:
+  ms-payment-api:
+    image: 'redsnoww/ms-payment-api:0.1.0'
+    container_name: 'ms-payment-api'
+    ports:
+      - "8081:8080"
+    depends_on:
+      db-ms-payment:
+        condition: service_healthy
+    environment:
+        - 'SPRING_APP_URL=8080'
+        - 'SPRING_DATASOURCE_URL=jdbc:mysql://db-ms-payment:3306/db-ms-payment'
+        - 'SPRING_DATASOURCE_USERNAME=user'
+        - 'SPRING_DATASOURCE_PASSWORD=secret'
+        - 'SPRING_RABBITMQ_HOST=rabbitmq'
+        - 'SPRING_RABBITMQ_PORT=5672'
+
+  db-ms-payment:
+    container_name: 'db-ms-payment'
+    image: 'mysql:latest'
+    environment:
+      - 'MYSQL_DATABASE=db-ms-payment'
+      - 'MYSQL_PASSWORD=secret'
+      - 'MYSQL_ROOT_PASSWORD=secret'
+      - 'MYSQL_USER=user'
+    ports:
+      - '3307:3306'
+    healthcheck:
+        test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+  #rabbitmq:
+  #  image: 'rabbitmq:latest'
+  #  environment:
+  #    - 'RABBITMQ_DEFAULT_PASS=secret'
+  #    - 'RABBITMQ_DEFAULT_USER=myuser'
+  #  ports:
+  #    - '5672'
+# The commented out section below is an example of how to define a PostgreSQL
+# database that your application can use. `depends_on` tells Docker Compose to
+# start the database before your application. The `db-data` volume persists the
+# database data between container restarts. The `db-password` secret is used
+# to set the database password. You must create `db/password.txt` and add
+# a password of your choosing to it before running `docker-compose up`.
+#     depends_on:
+#       db:
+#         condition: service_healthy
+#   db:
+#     image: postgres
+#     restart: always
+#     user: postgres
+#     secrets:
+#       - db-password
+#     volumes:
+#       - db-data:/var/lib/postgresql/data
+#     environment:
+#       - POSTGRES_DB=example
+#       - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+#     expose:
+#       - 5432
+#     healthcheck:
+#       test: [ "CMD", "pg_isready" ]
+#       interval: 10s
+#       timeout: 5s
+#       retries: 5
+# volumes:
+#   db-data:
+# secrets:
+#   db-password:
+#     file: db/password.txt
+
