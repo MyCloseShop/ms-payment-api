@@ -1,4 +1,4 @@
-package com.etna.gpe.mycloseshop.ms_payment_api;
+package com.etna.gpe.ms_payment_api;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
@@ -6,7 +6,6 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @EnableDiscoveryClient
 @SpringBootApplication(scanBasePackages = {
-        "com.etna.gpe.mycloseshop.ms_payment_api",
         "com.etna.gpe.mycloseshop.security_api",
         "com.etna.gpe.mycloseshop.common_api",
 

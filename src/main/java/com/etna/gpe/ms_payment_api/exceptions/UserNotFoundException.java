@@ -1,4 +1,4 @@
-package com.etna.gpe.mycloseshop.ms_payment_api.exceptions;
+package com.etna.gpe.ms_payment_api.exceptions;
 
 public class UserNotFoundException extends RuntimeException {
 

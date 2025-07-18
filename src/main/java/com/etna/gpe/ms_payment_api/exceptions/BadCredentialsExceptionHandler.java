@@ -1,4 +1,4 @@
-package com.etna.gpe.mycloseshop.ms_payment_api.exceptions;
+package com.etna.gpe.ms_payment_api.exceptions;
 
 import com.etna.gpe.mycloseshop.common_api.ms_login.dto.error.ResponseError;
 import org.springframework.http.ResponseEntity;
