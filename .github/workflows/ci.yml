@@ -39,21 +39,6 @@ jobs:
       - name: Run tests
         run: mvn test -Dspring.profiles.active=test
 
-      - name: Generate test report
-        uses: dorny/test-reporter@v1
-        if: success() || failure()
-        with:
-          name: Maven Tests
-          path: target/surefire-reports/*.xml
-          reporter: java-junit
-
-      - name: Upload test results
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          path: target/surefire-reports/
-
       - name: Build application
         run: mvn clean package -DskipTests
 
@@ -168,3 +153,4 @@ jobs:
       # Add your deployment steps here (Docker, Azure, AWS, etc.)
       - name: Deploy to staging
         run: echo "Add your deployment commands here"
+
