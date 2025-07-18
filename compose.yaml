@@ -8,44 +8,12 @@
 # database or a cache. For examples, see the Awesome Compose repository:
 # https://github.com/docker/awesome-compose
 services:
-  ms-payment-api:
-    image: 'redsnoww/ms-payment-api:0.1.0'
-    container_name: 'ms-payment-api'
+  server:
+    build:
+      context: .
     ports:
-      - "8081:8080"
-    depends_on:
-      db-ms-payment:
-        condition: service_healthy
-    environment:
-        - 'SPRING_APP_URL=8080'
-        - 'SPRING_DATASOURCE_URL=jdbc:mysql://db-ms-payment:3306/db-ms-payment'
-        - 'SPRING_DATASOURCE_USERNAME=user'
-        - 'SPRING_DATASOURCE_PASSWORD=secret'
-        - 'SPRING_RABBITMQ_HOST=rabbitmq'
-        - 'SPRING_RABBITMQ_PORT=5672'
+      - "8080:8080"
 
-  db-ms-payment:
-    container_name: 'db-ms-payment'
-    image: 'mysql:latest'
-    environment:
-      - 'MYSQL_DATABASE=db-ms-payment'
-      - 'MYSQL_PASSWORD=secret'
-      - 'MYSQL_ROOT_PASSWORD=secret'
-      - 'MYSQL_USER=user'
-    ports:
-      - '3307:3306'
-    healthcheck:
-        test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-        interval: 10s
-        timeout: 5s
-        retries: 5
-  #rabbitmq:
-  #  image: 'rabbitmq:latest'
-  #  environment:
-  #    - 'RABBITMQ_DEFAULT_PASS=secret'
-  #    - 'RABBITMQ_DEFAULT_USER=myuser'
-  #  ports:
-  #    - '5672'
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to
 # start the database before your application. The `db-data` volume persists the

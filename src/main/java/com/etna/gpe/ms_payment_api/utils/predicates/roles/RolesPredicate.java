@@ -1,4 +1,4 @@
-package com.etna.gpe.mycloseshop.ms_payment_api.utils.predicates.roles;
+package com.etna.gpe.ms_payment_api.utils.predicates.roles;
 
 import com.etna.gpe.mycloseshop.common_api.ms_login.enums.Roles;
 
