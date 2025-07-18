@@ -6,10 +6,39 @@ logging:
     slf4j: INFO
     org.springframework.security: INFO
 
+# Configuration Stripe (Mode TEST par défaut pour développement MVP)
+stripe:
+  # Mode de fonctionnement : test ou live
+  mode: ${STRIPE_MODE:test}
+
+  # Clés TEST (mode développement - AUCUNE vraie transaction)
+  public-key: ${STRIPE_PUBLIC_KEY:pk_test_51xxxxx} # Remplace par ta vraie clé test
+  secret-key: ${STRIPE_SECRET_KEY:sk_test_51xxxxx} # Remplace par ta vraie clé test
+  webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_xxxxx} # Secret webhook test
+
+  # URLs de redirection après paiement
+  success-url: ${STRIPE_SUCCESS_URL:http://localhost:3000/payment/success?session_id={CHECKOUT_SESSION_ID}}
+  cancel-url: ${STRIPE_CANCEL_URL:http://localhost:3000/payment/cancel}
+
+  # Configuration spécifique au mode test
+  test:
+    simulate-delays: false # Simule les délais réseau en test
+    auto-confirm: true # Auto-confirme les paiements en test
+
 rabbitmq:
   exchange:
+    payment: payment.exchange
+    appointment: appointment.exchange
   queue:
+    payment-completed: payment.completed.queue
+    payment-refunded: payment.refunded.queue
+    appointment-confirmed: appointment.confirmed.queue
+    appointment-cancelled: appointment.cancelled.queue
   routing-keys:
+    payment-completed: payment.completed
+    payment-refunded: payment.refunded
+    appointment-confirmed: appointment.confirmed
+    appointment-cancelled: appointment.cancelled
 
 server:
   port: ${SPRING_APP_URL:8087}
