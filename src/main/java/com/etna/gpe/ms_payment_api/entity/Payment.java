@@ -1,31 +1,21 @@
 package com.etna.gpe.ms_payment_api.entity;
 
 import com.etna.gpe.ms_payment_api.enums.PaymentStatus;
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.PrePersist;
-import jakarta.persistence.PreUpdate;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
+import jakarta.persistence.*;
 import lombok.Data;
 import lombok.NoArgsConstructor;
-import org.hibernate.proxy.HibernateProxy;
+import lombok.AllArgsConstructor;
 
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Objects;
 import java.util.UUID;
 
+/**
+ * Entité représentant un paiement dans le système.
+ * Utilise Stripe Connect pour gérer les paiements avec destination vers le compte du shop.
+ */
 @Entity
-@Table(name = "stripe_payments")
+@Table(name = "payment")
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
 public class Payment {
@@ -34,83 +24,52 @@ public class Payment {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(name = "stripe_payment_intent_id", nullable = false, unique = true)
-    private String stripePaymentIntentId;
+    @Column(nullable = false)
+    private long amount;
 
-    @Column(name = "stripe_checkout_session_id")
-    private String stripeCheckoutSessionId;
+    @Column(nullable = false, length = 3)
+    private String currency;
 
-    @Column(name = "user_id", columnDefinition = "BINARY(16)", length = 36, nullable = false)
+    @Column(name = "user_id", nullable = false)
     private UUID userId;
 
-    @Column(name = "shop_id", columnDefinition = "BINARY(16)", length = 36, nullable = false)
+    @Column(name = "shop_id", nullable = false)
     private UUID shopId;
 
-    @Column(name = "appointment_id", columnDefinition = "BINARY(16)", length = 36)
+    @Column(name = "appointment_id")
     private UUID appointmentId;
-
-    @Column(name = "amount", nullable = false, precision = 10, scale = 2)
-    private BigDecimal amount;
-
-    @Column(name = "commission_amount", nullable = false, precision = 10, scale = 2)
-    private BigDecimal commissionAmount;
-
-    @Column(name = "commission_rate", nullable = false, precision = 5, scale = 4)
-    private BigDecimal commissionRate;
-
-    @Column(name = "currency", nullable = false)
-    @Builder.Default
-    private String currency = "EUR";
+    
+    @Column(name = "service_id")
+    private UUID serviceId;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 50)
-    @Builder.Default
-    private PaymentStatus status = PaymentStatus.PENDING;
+    @Column(nullable = false, length = 20)
+    private PaymentStatus status;
 
-    @Column(name = "refund_eligible_until")
-    private LocalDateTime refundEligibleUntil;
+    @Column(name = "stripe_session_id")
+    private String stripeSessionId;
 
-    @Column(name = "stripe_refund_id")
-    private String stripeRefundId;
+    @Column(name = "stripe_payment_intent_id")
+    private String stripePaymentIntentId;
 
-    @Column(name = "refunded_amount", precision = 10, scale = 2)
-    private BigDecimal refundedAmount;
-
-    @Column(name = "description")
-    private String description;
+    @Column(name = "stripe_charge_id")
+    private String stripeChargeId;
 
     @Column(name = "created_at", nullable = false)
     private LocalDateTime createdAt;
 
-    @Column(name = "updated_at")
+    @Column(name = "updated_at", nullable = false)
     private LocalDateTime updatedAt;
 
     @PrePersist
-    protected void onCreate() {
-        createdAt = LocalDateTime.now();
-        updatedAt = LocalDateTime.now();
-        // Définir la date limite de remboursement à 48h après création
-        refundEligibleUntil = createdAt.plusHours(48);
+    public void prePersist() {
+        LocalDateTime now = LocalDateTime.now();
+        createdAt = now;
+        updatedAt = now;
     }
 
     @PreUpdate
-    protected void onUpdate() {
+    public void preUpdate() {
         updatedAt = LocalDateTime.now();
-    }
-
-    @Override
-    public final boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null) return false;
-        Class<?> oEffectiveClass = o instanceof HibernateProxy ? ((HibernateProxy) o).getHibernateLazyInitializer().getPersistentClass() : o.getClass();
-        Class<?> thisEffectiveClass = this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass() : this.getClass();
-        if (thisEffectiveClass != oEffectiveClass) return false;
-        Payment payment = (Payment) o;
-        return getId() != null && Objects.equals(getId(), payment.getId());
-    }
-
-    @Override
-    public final int hashCode() {
-        return this instanceof HibernateProxy ? ((HibernateProxy) this).getHibernateLazyInitializer().getPersistentClass().hashCode() : getClass().hashCode();
     }
 }

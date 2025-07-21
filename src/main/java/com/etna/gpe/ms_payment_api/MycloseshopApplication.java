@@ -6,6 +6,7 @@ import org.springframework.cloud.client.discovery.EnableDiscoveryClient;
 
 @EnableDiscoveryClient
 @SpringBootApplication(scanBasePackages = {
+        "com.etna.gpe.ms_payment_api",
         "com.etna.gpe.mycloseshop.security_api",
         "com.etna.gpe.mycloseshop.common_api",
 

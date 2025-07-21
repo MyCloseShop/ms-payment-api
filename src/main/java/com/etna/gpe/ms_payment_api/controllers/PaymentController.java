@@ -1,90 +1,94 @@
 package com.etna.gpe.ms_payment_api.controllers;
 
-import com.etna.gpe.ms_payment_api.dto.CreatePaymentRequest;
-import com.etna.gpe.ms_payment_api.dto.PaymentResponse;
+import com.etna.gpe.ms_payment_api.dto.CheckoutRequestDto;
+import com.etna.gpe.ms_payment_api.dto.RefundRequestDto;
+import com.etna.gpe.ms_payment_api.entity.Payment;
 import com.etna.gpe.ms_payment_api.services.PaymentService;
-import com.etna.gpe.mycloseshop.security_api.entity.JwtUserDetails;
-import com.stripe.exception.StripeException;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Contrôleur REST pour gérer les paiements Stripe Connect.
+ */
 @RestController
 @RequestMapping("/payments")
-@RequiredArgsConstructor
 @Slf4j
-public class PaymentController {
+public class PaymentController implements IPaymentController {
 
     private final PaymentService paymentService;
 
-    /**
-     * Créer un paiement avec Stripe Checkout
-     */
-    @PostMapping("/create")
-    public ResponseEntity<PaymentResponse> createPayment(
-            @Valid @RequestBody CreatePaymentRequest request,
-            Authentication authentication) {
-        try {
-            // Récupérer l'ID utilisateur depuis le contexte JWT
-            UUID userId = getUserIdFromAuthentication(authentication);
-
-
-            PaymentResponse response = paymentService.createPayment(request, userId);
-            return ResponseEntity.ok(response);
-
-        } catch (StripeException e) {
-            log.error("Erreur Stripe lors de la création du paiement", e);
-            return ResponseEntity.badRequest().body(
-                    PaymentResponse.builder()
-                            .status("ERROR")
-                            .message("Erreur lors de la création du paiement: " + e.getMessage())
-                            .build()
-            );
-        } catch (Exception e) {
-            log.error("Erreur lors de la création du paiement", e);
-            return ResponseEntity.internalServerError().body(
-                    PaymentResponse.builder()
-                            .status("ERROR")
-                            .message("Erreur interne: " + e.getMessage())
-                            .build()
-            );
-        }
+    @Autowired
+    public PaymentController(PaymentService paymentService) {
+        this.paymentService = paymentService;
     }
 
     /**
-     * Vérifier l'éligibilité au remboursement
+     * Endpoint pour créer une session de paiement Stripe Checkout.
+     * @param dto Données de la requête de paiement
+     * @return URL de la session Checkout
      */
-    @GetMapping("/{paymentId}/refund-eligible")
-    public ResponseEntity<Boolean> isRefundEligible(@PathVariable UUID paymentId) {
-        try {
-            boolean eligible = paymentService.isRefundEligible(paymentId);
-            return ResponseEntity.ok(eligible);
-        } catch (Exception e) {
-            log.error("Erreur lors de la vérification d'éligibilité au remboursement", e);
-            return ResponseEntity.badRequest().body(false);
-        }
+    @PostMapping("/checkout")
+    public ResponseEntity<Map<String, String>> createCheckout(@RequestBody CheckoutRequestDto dto) {
+        log.info("Creating checkout session for user: {}, shop: {}", dto.getUserId(), dto.getShopId());
+
+        String checkoutUrl = paymentService.createCheckoutSession(
+            dto.getUserId(),
+            dto.getShopId(),
+            dto.getAppointmentId(),
+            dto.getServiceId(),
+            dto.getAmount(),
+            dto.getCurrency()
+        );
+
+        return ResponseEntity.ok(Map.of("checkout_url", checkoutUrl));
     }
 
-    private UUID getUserIdFromAuthentication(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            throw new IllegalArgumentException("Utilisateur non authentifié");
-        }
+    /**
+     * Endpoint optionnel pour initier un remboursement depuis l'application.
+     * @param paymentId ID du paiement à rembourser
+     * @param dto Données du remboursement
+     * @return Le paiement mis à jour
+     */
+    @PostMapping("/refund/{paymentId}")
+    public ResponseEntity<Payment> refundPayment(@PathVariable UUID paymentId, @RequestBody RefundRequestDto dto) {
+        log.info("Initiating refund for payment: {}", paymentId);
 
-        JwtUserDetails userDetails = (JwtUserDetails) authentication.getPrincipal();
-        if (userDetails == null || userDetails.userId() == null) {
-            throw new IllegalArgumentException("ID utilisateur introuvable dans le contexte d'authentification");
-        }
+        Payment refundedPayment = paymentService.refundPayment(paymentId, dto.getAmount());
+        return ResponseEntity.ok(refundedPayment);
+    }
 
-        return UUID.fromString(userDetails.userId());
+    /**
+     * Endpoint pour récupérer un paiement par son ID.
+     * @param paymentId ID du paiement
+     * @return Le paiement trouvé
+     */
+    @GetMapping("/{paymentId}")
+    public ResponseEntity<Payment> getPayment(@PathVariable UUID paymentId) {
+        log.info("Getting payment: {}", paymentId);
+        Payment payment = paymentService.findById(paymentId);
+        return ResponseEntity.ok(payment);
+    }
+    
+    /**
+     * Endpoint pour vérifier le statut de paiement d'un rendez-vous.
+     * @param appointmentId ID du rendez-vous
+     * @return Le paiement associé au rendez-vous ou 404 si aucun paiement n'est trouvé
+     */
+    @GetMapping("/appointment/{appointmentId}")
+    public ResponseEntity<Payment> getPaymentByAppointment(@PathVariable UUID appointmentId) {
+        log.info("Getting payment for appointment: {}", appointmentId);
+        
+        Payment payment = paymentService.findByAppointmentId(appointmentId);
+        
+        if (payment != null) {
+            return ResponseEntity.ok(payment);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

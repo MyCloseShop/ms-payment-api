@@ -1,139 +1,125 @@
 package com.etna.gpe.ms_payment_api.controllers;
 
-import com.etna.gpe.ms_payment_api.config.StripeConfig;
 import com.etna.gpe.ms_payment_api.services.PaymentService;
-import com.etna.gpe.ms_payment_api.services.StripeConnectService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
-import com.stripe.model.StripeObject;
+import com.stripe.model.Charge;
 import com.stripe.model.checkout.Session;
 import com.stripe.net.Webhook;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
+/**
+ * Contrôleur webhook pour recevoir et traiter les événements Stripe de manière sécurisée.
+ */
 @RestController
-@RequestMapping("/stripe-webhook")
-@RequiredArgsConstructor
+@RequestMapping("/stripe")
 @Slf4j
-public class StripeWebhookController {
+public class StripeWebhookController implements IStripeWebhookController {
+
+    @Value("${stripe.webhook.secret}")
+    private String endpointSecret;
 
     private final PaymentService paymentService;
-    private final StripeConnectService stripeConnectService;
-    private final StripeConfig stripeConfig;
+
+    @Autowired
+    public StripeWebhookController(PaymentService paymentService) {
+        this.paymentService = paymentService;
+    }
 
     /**
-     * Endpoint webhook pour recevoir les événements Stripe
+     * Endpoint webhook pour recevoir les événements Stripe.
+     * Vérifie la signature Stripe pour sécuriser l'endpoint.
+     *
+     * @param payload Corps de la requête webhook
+     * @param sigHeader En-tête de signature Stripe
+     * @return Réponse HTTP
      */
-    @PostMapping
-    public ResponseEntity<String> handleStripeWebhook(
-            @RequestBody String payload,
-            @RequestHeader("Stripe-Signature") String sigHeader) {
+    @PostMapping("/webhook")
+    public ResponseEntity<String> handleStripeEvent(@RequestBody String payload,
+                                                    @RequestHeader("Stripe-Signature") String sigHeader) {
+        log.info("Received Stripe webhook");
 
         Event event;
-
         try {
-            // Vérifier la signature du webhook pour la sécurité
-            event = Webhook.constructEvent(payload, sigHeader, stripeConfig.getWebhookSecret());
+            // Vérification de la signature Stripe pour sécuriser le webhook
+            event = Webhook.constructEvent(payload, sigHeader, endpointSecret);
         } catch (SignatureVerificationException e) {
-            log.error("Signature webhook Stripe invalide: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Signature invalide");
+            log.error("Invalid Stripe signature", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid signature");
         } catch (Exception e) {
-            log.error("Erreur lors du parsing du webhook Stripe: {}", e.getMessage());
-            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Erreur de parsing");
+            log.error("Error parsing Stripe webhook", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body("Invalid payload");
         }
 
-        // Traiter l'événement selon son type
+        // Traitement des différents types d'événements Stripe
+        String eventType = event.getType();
+        log.info("Processing Stripe event: {}", eventType);
+
         try {
-            handleEvent(event);
-            return ResponseEntity.ok("Événement traité avec succès");
+            switch (eventType) {
+                case "checkout.session.completed":
+                    handleCheckoutSessionCompleted(event);
+                    break;
+
+                case "charge.refunded":
+                    handleChargeRefunded(event);
+                    break;
+
+                case "payment_intent.payment_failed":
+                    handlePaymentFailed(event);
+                    break;
+
+                default:
+                    log.info("Unhandled Stripe event type: {}", eventType);
+                    break;
+            }
         } catch (Exception e) {
-            log.error("Erreur lors du traitement de l'événement Stripe: {} - {}", event.getType(), e.getMessage());
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erreur de traitement");
+            log.error("Error processing Stripe event: {}", eventType, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Processing error");
         }
+
+        return ResponseEntity.ok("Success");
     }
 
     /**
-     * Traiter les différents types d'événements Stripe
-     */
-    private void handleEvent(Event event) {
-        log.info("Traitement de l'événement Stripe: {}", event.getType());
-
-        switch (event.getType()) {
-            case "checkout.session.completed":
-                handleCheckoutSessionCompleted(event);
-                break;
-
-            case "payment_intent.succeeded":
-                handlePaymentIntentSucceeded(event);
-                break;
-
-            case "account.updated":
-                handleAccountUpdated(event);
-                break;
-
-            default:
-                log.info("Événement Stripe non géré: {}", event.getType());
-        }
-    }
-
-    /**
-     * Gérer la finalisation d'une session Checkout
+     * Traite l'événement checkout.session.completed.
+     * Indique que le client a complété le paiement avec succès.
      */
     private void handleCheckoutSessionCompleted(Event event) {
-        try {
-            StripeObject stripeObject = event.getDataObjectDeserializer().getObject().orElse(null);
-            if (stripeObject instanceof Session session) {
-                log.info("Session Checkout complétée: {}", session.getId());
-
-                // Confirmer le paiement en base
-                paymentService.confirmPayment(session.getId());
-
-                log.info("Paiement confirmé avec succès pour la session: {}", session.getId());
-            }
-        } catch (Exception e) {
-            log.error("Erreur lors du traitement de checkout.session.completed: {}", e.getMessage());
-            throw e;
+        Session session = (Session) event.getDataObjectDeserializer().getObject().orElse(null);
+        if (session != null) {
+            log.info("Processing checkout.session.completed for session: {}", session.getId());
+            paymentService.handleCheckoutCompleted(session.getId());
+        } else {
+            log.error("Failed to deserialize checkout.session.completed event");
         }
     }
 
     /**
-     * Gérer le succès d'un PaymentIntent
+     * Traite l'événement charge.refunded.
+     * Indique qu'un remboursement a été effectué sur le paiement.
      */
-    private void handlePaymentIntentSucceeded(Event event) {
-        try {
-            StripeObject stripeObject = event.getDataObjectDeserializer().getObject().orElse(null);
-            if (stripeObject instanceof com.stripe.model.PaymentIntent paymentIntent) {
-                log.info("PaymentIntent réussi: {}", paymentIntent.getId());
-                // Logique supplémentaire si nécessaire
-            }
-        } catch (Exception e) {
-            log.error("Erreur lors du traitement de payment_intent.succeeded: {}", e.getMessage());
+    private void handleChargeRefunded(Event event) {
+        Charge charge = (Charge) event.getDataObjectDeserializer().getObject().orElse(null);
+        if (charge != null) {
+            log.info("Processing charge.refunded for charge: {}", charge.getId());
+            paymentService.handlePaymentRefunded(charge.getPaymentIntent());
+        } else {
+            log.error("Failed to deserialize charge.refunded event");
         }
     }
 
     /**
-     * Gérer la mise à jour d'un compte Connect
+     * Traite l'événement payment_intent.payment_failed.
+     * Indique qu'un paiement a échoué.
      */
-    private void handleAccountUpdated(Event event) {
-        try {
-            StripeObject stripeObject = event.getDataObjectDeserializer().getObject().orElse(null);
-            if (stripeObject instanceof com.stripe.model.Account account) {
-                log.info("Compte Connect mis à jour: {}", account.getId());
-
-                // Mettre à jour le statut du compte en base
-                stripeConnectService.updateAccountStatus(account.getId());
-
-                log.info("Statut du compte mis à jour: {}", account.getId());
-            }
-        } catch (Exception e) {
-            log.error("Erreur lors du traitement de account.updated: {}", e.getMessage());
-        }
+    private void handlePaymentFailed(Event event) {
+        log.info("Payment failed event received: {}", event.getId());
+        // Implementation future si nécessaire pour gérer les échecs de paiement
     }
 }

@@ -1,33 +1,43 @@
 package com.etna.gpe.ms_payment_api.repositories;
 
 import com.etna.gpe.ms_payment_api.entity.Payment;
-import com.etna.gpe.ms_payment_api.enums.PaymentStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
-import org.springframework.data.jpa.repository.Query;
-import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
-import java.time.LocalDateTime;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+/**
+ * Repository pour gérer les opérations de base de données sur les paiements.
+ */
 @Repository
 public interface PaymentRepository extends JpaRepository<Payment, UUID> {
 
-    Optional<Payment> findByStripePaymentIntentId(String stripePaymentIntentId);
+    /**
+     * Trouve un paiement par son ID de session Stripe.
+     * @param sessionId L'ID de la session Stripe
+     * @return Le paiement correspondant, si trouvé
+     */
+    Optional<Payment> findByStripeSessionId(String sessionId);
 
-    Optional<Payment> findByStripeCheckoutSessionId(String stripeCheckoutSessionId);
+    /**
+     * Trouve un paiement par son ID de PaymentIntent Stripe.
+     * @param paymentIntentId L'ID du PaymentIntent Stripe
+     * @return Le paiement correspondant, si trouvé
+     */
+    Optional<Payment> findByStripePaymentIntentId(String paymentIntentId);
 
-    List<Payment> findByUserIdAndStatus(UUID userId, PaymentStatus status);
-
-    List<Payment> findByShopIdAndStatus(UUID shopId, PaymentStatus status);
-
+    /**
+     * Trouve un paiement par son ID de charge Stripe.
+     * @param chargeId L'ID de la charge Stripe
+     * @return Le paiement correspondant, si trouvé
+     */
+    Optional<Payment> findByStripeChargeId(String chargeId);
+    
+    /**
+     * Trouve un paiement par son ID de rendez-vous.
+     * @param appointmentId L'ID du rendez-vous
+     * @return Le paiement correspondant, si trouvé
+     */
     Optional<Payment> findByAppointmentId(UUID appointmentId);
-
-    @Query("SELECT p FROM Payment p WHERE p.status = :status AND p.refundEligibleUntil < :now")
-    List<Payment> findExpiredRefundEligiblePayments(@Param("status") PaymentStatus status, @Param("now") LocalDateTime now);
-
-    @Query("SELECT p FROM Payment p WHERE p.userId = :userId ORDER BY p.createdAt DESC")
-    List<Payment> findByUserIdOrderByCreatedAtDesc(@Param("userId") Long userId);
 }

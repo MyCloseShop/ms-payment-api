@@ -5,11 +5,22 @@ import org.springframework.amqp.core.BindingBuilder;
 import org.springframework.amqp.core.DirectExchange;
 import org.springframework.amqp.core.Queue;
 import org.springframework.amqp.core.QueueBuilder;
+import org.springframework.amqp.rabbit.connection.ConnectionFactory;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Profile;
 
+/**
+ * Configuration RabbitMQ complète pour les événements de paiement Stripe.
+ * Désactivée pendant les tests via @Profile.
+ */
 @Configuration
+@Profile("!test")
+@ConditionalOnProperty(name = "spring.rabbitmq.host", matchIfMissing = true)
 public class RabbitMQPaymentConfig {
 
     @Value("${rabbitmq.exchange.payment}")
@@ -101,5 +112,15 @@ public class RabbitMQPaymentConfig {
         return BindingBuilder.bind(appointmentCancelledQueue())
                 .to(appointmentExchange())
                 .with(appointmentCancelledRoutingKey);
+    }
+
+    /**
+     * Configuration du RabbitTemplate avec convertisseur JSON pour Stripe.
+     */
+    @Bean
+    public RabbitTemplate rabbitTemplate(ConnectionFactory connectionFactory) {
+        RabbitTemplate template = new RabbitTemplate(connectionFactory);
+        template.setMessageConverter(new Jackson2JsonMessageConverter());
+        return template;
     }
 }

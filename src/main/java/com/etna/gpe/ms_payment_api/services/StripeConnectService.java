@@ -1,114 +1,165 @@
 package com.etna.gpe.ms_payment_api.services;
 
-import com.etna.gpe.ms_payment_api.entity.ShopStripeAccount;
-import com.etna.gpe.ms_payment_api.repositories.ShopStripeAccountRepository;
+import com.etna.gpe.mycloseshop.security_api.config.JwtTokenUtil;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Account;
 import com.stripe.model.AccountLink;
 import com.stripe.param.AccountCreateParams;
 import com.stripe.param.AccountLinkCreateParams;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.client.RestTemplate;
 
-import java.util.Optional;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Service pour gérer l'onboarding des shops avec Stripe Connect (comptes Standard).
+ */
 @Service
-@RequiredArgsConstructor
 @Slf4j
-public class StripeConnectService {
+public class StripeConnectService implements IStripeConnectService {
 
-    private final ShopStripeAccountRepository shopStripeAccountRepository;
+    public static final String AUTHORIZATION = "Authorization";
+    public static final String BEARER = "Bearer ";
 
-    /**
-     * Créer un compte Stripe Connect pour un shop (approche simple - Express Account)
-     */
-    @Transactional
-    public ShopStripeAccount createStripeAccount(UUID shopId) throws StripeException {
-        log.info("Création d'un compte Stripe Connect pour le shop: {}", shopId);
+    @Value("${app.base-url}")
+    private String baseUrl;
+    
+    @Value("${microservices.shop-api.url}")
+    private String shopApiUrl;
 
-        // Vérifier si le shop a déjà un compte Stripe
-        Optional<ShopStripeAccount> existingAccount = shopStripeAccountRepository.findByShopId(shopId);
-        if (existingAccount.isPresent()) {
-            log.warn("Le shop {} a déjà un compte Stripe: {}", shopId, existingAccount.get().getStripeAccountId());
-            return existingAccount.get();
-        }
-
-        // Créer un compte Express Stripe Connect (le plus simple pour MVP)
-        AccountCreateParams params = AccountCreateParams.builder()
-                .setType(AccountCreateParams.Type.EXPRESS)
-                .setCountry("FR") // France pour EUR
-                .setDefaultCurrency("eur")
-                .build();
-
-        Account stripeAccount = Account.create(params);
-
-        // Sauvegarder en base
-        ShopStripeAccount shopStripeAccount = ShopStripeAccount.builder()
-                .shopId(shopId)
-                .stripeAccountId(stripeAccount.getId())
-                .onboardingCompleted(false)
-                .chargesEnabled(false)
-                .payoutsEnabled(false)
-                .build();
-
-        return shopStripeAccountRepository.save(shopStripeAccount);
+    private final JwtTokenUtil jwtTokenUtil;
+    
+    private final RestTemplate restTemplate;
+    
+    @Autowired
+    public StripeConnectService(RestTemplate restTemplate, JwtTokenUtil jwtTokenUtil) {
+        this.restTemplate = restTemplate;
+        this.jwtTokenUtil = jwtTokenUtil;
     }
 
     /**
-     * Générer un lien d'onboarding pour que le shop configure son compte Stripe
+     * Crée un compte Stripe Connect Standard pour un shop.
+     * @param shopId ID du shop
+     * @return L'ID du compte Stripe connecté créé
      */
-    public String createOnboardingLink(UUID shopId, String returnUrl, String refreshUrl) throws StripeException {
-        log.info("Génération du lien d'onboarding pour le shop: {}", shopId);
+    public String createConnectedAccount(UUID shopId) {
+        log.info("Creating Stripe connected account for shop: {}", shopId);
 
-        ShopStripeAccount shopAccount = shopStripeAccountRepository.findByShopId(shopId)
-                .orElseThrow(() -> new RuntimeException("Aucun compte Stripe trouvé pour le shop: " + shopId));
+        try {
+            AccountCreateParams params = AccountCreateParams.builder()
+                .setType(AccountCreateParams.Type.STANDARD)
+                .build();
 
-        AccountLinkCreateParams params = AccountLinkCreateParams.builder()
-                .setAccount(shopAccount.getStripeAccountId())
-                .setRefreshUrl(refreshUrl)
-                .setReturnUrl(returnUrl)
+            Account account = Account.create(params);
+            String accountId = account.getId();
+
+            log.info("Stripe connected account created: {} for shop: {}", accountId, shopId);
+            // TODO: Stocker accountId associé à ce shop en BD ou via un service Shop
+
+            return accountId;
+        } catch (StripeException e) {
+            log.error("Error creating Stripe connected account for shop: {}", shopId, e);
+            throw new RuntimeException("Erreur lors de la création du compte Stripe connecté", e);
+        }
+    }
+
+    /**
+     * Génère un Account Link pour permettre au shop de compléter son onboarding Stripe.
+     * @param accountId ID du compte Stripe connecté
+     * @return URL du lien d'onboarding à transmettre au shop
+     */
+    public String createAccountLink(String accountId) {
+        log.info("Creating account link for Stripe account: {}", accountId);
+
+        try {
+            AccountLinkCreateParams linkParams = AccountLinkCreateParams.builder()
+                .setAccount(accountId)
+                .setRefreshUrl(baseUrl + "/stripe/reauth")
+                .setReturnUrl(baseUrl + "/stripe/return")
                 .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
                 .build();
 
-        AccountLink accountLink = AccountLink.create(params);
-        return accountLink.getUrl();
+            AccountLink link = AccountLink.create(linkParams);
+            String onboardingUrl = link.getUrl();
+
+            log.info("Account link created for account: {}", accountId);
+            return onboardingUrl;
+        } catch (StripeException e) {
+            log.error("Error creating account link for account: {}", accountId, e);
+            throw new RuntimeException("Erreur lors de la création du lien d'onboarding Stripe", e);
+        }
     }
 
     /**
-     * Mettre à jour le statut du compte Stripe après onboarding
+     * Met à jour l'ID du compte Stripe connecté pour un shop.
+     * @param shopId ID du shop
+     * @param stripeAccountId ID du compte Stripe connecté
      */
-    @Transactional
-    public void updateAccountStatus(String stripeAccountId) throws StripeException {
-        log.info("Mise à jour du statut du compte Stripe: {}", stripeAccountId);
-
-        Account account = Account.retrieve(stripeAccountId);
-
-        ShopStripeAccount shopAccount = shopStripeAccountRepository.findByStripeAccountId(stripeAccountId)
-                .orElseThrow(() -> new RuntimeException("Compte Stripe non trouvé: " + stripeAccountId));
-
-        shopAccount.setChargesEnabled(account.getChargesEnabled());
-        shopAccount.setPayoutsEnabled(account.getPayoutsEnabled());
-        shopAccount.setOnboardingCompleted(account.getDetailsSubmitted());
-
-        shopStripeAccountRepository.save(shopAccount);
+    private void updateShopStripeAccount(UUID shopId, String stripeAccountId) {
+        log.info("Updating Stripe account ID for shop: {}", shopId);
+        
+        try {
+            String url = shopApiUrl + "/shop/" + shopId + "/stripe-account";
+            log.debug("Calling ms-shop-api at: {}", url);
+            
+            // Générer un token JWT pour l'authentification
+            String tokenMs = jwtTokenUtil.generateTokenForMsWith("ms-payment-api", UUID.randomUUID(), List.of("ROLE_ADMIN"));
+            log.debug("Using token for ms-shop-api: {}", tokenMs);
+            
+            // Préparer les headers avec le token d'authentification
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
+            headers.set(AUTHORIZATION, BEARER + tokenMs);
+            
+            // Préparer le corps de la requête
+            Map<String, String> requestBody = new HashMap<>();
+            requestBody.put("stripeAccountId", stripeAccountId);
+            log.debug("Updating Stripe account ID for shop: {} with Stripe account ID: {}", shopId, stripeAccountId);
+            
+            // Créer l'entité de la requête
+            HttpEntity<Map<String, String>> requestEntity = new HttpEntity<>(requestBody, headers);
+            
+            // Faire l'appel API avec exchange au lieu de postForObject
+            ResponseEntity<String> response = restTemplate.exchange(
+                url,
+                HttpMethod.PUT,
+                requestEntity,
+                String.class
+            );
+            
+            if (response.getStatusCode().is2xxSuccessful()) {
+                log.info("Shop Stripe account ID updated successfully: {}", response.getBody());
+            } else {
+                log.warn("Failed to update Stripe account ID for shop: {}. Status code: {}", shopId, response.getStatusCode());
+            }
+        } catch (Exception e) {
+            log.error("Error updating Stripe account ID for shop: {}", shopId, e);
+            // On continue même en cas d'erreur pour permettre l'onboarding
+        }
     }
 
     /**
-     * Récupérer le compte Stripe d'un shop
+     * Crée un compte connecté et génère immédiatement le lien d'onboarding.
+     * @param shopId ID du shop
+     * @return URL d'onboarding à transmettre au shop
      */
-    public Optional<ShopStripeAccount> getShopStripeAccount(UUID shopId) {
-        return shopStripeAccountRepository.findByShopId(shopId);
-    }
-
-    /**
-     * Vérifier si un shop peut recevoir des paiements
-     */
-    public boolean canReceivePayments(UUID shopId) {
-        return shopStripeAccountRepository.findByShopId(shopId)
-                .map(account -> account.getChargesEnabled() && account.getOnboardingCompleted())
-                .orElse(false);
+    public String onboardShop(UUID shopId) {
+        String accountId = createConnectedAccount(shopId);
+        
+        // Mettre à jour l'ID du compte Stripe dans le shop
+        updateShopStripeAccount(shopId, accountId);
+        
+        return createAccountLink(accountId);
     }
 }

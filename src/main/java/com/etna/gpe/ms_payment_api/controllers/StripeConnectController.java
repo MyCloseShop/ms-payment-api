@@ -1,132 +1,65 @@
 package com.etna.gpe.ms_payment_api.controllers;
 
-import com.etna.gpe.ms_payment_api.entity.ShopStripeAccount;
-import com.etna.gpe.ms_payment_api.services.StripeConnectService;
-import com.stripe.exception.StripeException;
-import lombok.RequiredArgsConstructor;
+import com.etna.gpe.ms_payment_api.services.IStripeConnectService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.PathVariable;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.Map;
 import java.util.UUID;
 
+/**
+ * Contrôleur pour gérer l'onboarding des shops avec Stripe Connect.
+ */
 @RestController
-@RequestMapping("/stripe-connect")
-@RequiredArgsConstructor
+@RequestMapping("/stripe/connect")
 @Slf4j
-public class StripeConnectController {
+public class StripeConnectController implements IStripeConnectController {
 
-    private final StripeConnectService stripeConnectService;
+    private final IStripeConnectService stripeConnectService;
+    
+    @Value("${stripe.api.version}")
+    private String stripeApiVersion;
 
-    /**
-     * Créer un compte Stripe Connect pour un shop
-     */
-    @PostMapping("/shops/{shopId}/create-account")
-    public ResponseEntity<?> createStripeAccount(@PathVariable UUID shopId) {
-        try {
-            ShopStripeAccount account = stripeConnectService.createStripeAccount(shopId);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Compte Stripe créé avec succès",
-                    "stripeAccountId", account.getStripeAccountId(),
-                    "onboardingCompleted", account.getOnboardingCompleted()
-            ));
-        } catch (StripeException e) {
-            log.error("Erreur Stripe lors de la création du compte", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Erreur Stripe: " + e.getMessage()
-            ));
-        } catch (Exception e) {
-            log.error("Erreur lors de la création du compte Stripe", e);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "success", false,
-                    "message", "Erreur interne: " + e.getMessage()
-            ));
-        }
+    @Autowired
+    public StripeConnectController(IStripeConnectService stripeConnectService) {
+        this.stripeConnectService = stripeConnectService;
     }
 
     /**
-     * Générer un lien d'onboarding pour un shop
+     * Endpoint pour démarrer l'onboarding d'un shop sur Stripe.
+     * @param shopId ID du shop à onboarder
+     * @return URL d'onboarding Stripe
      */
-    @PostMapping("/shops/{shopId}/onboarding-link")
-    public ResponseEntity<?> createOnboardingLink(
-            @PathVariable UUID shopId,
-            @RequestParam String returnUrl,
-            @RequestParam String refreshUrl) {
-        try {
-            String onboardingUrl = stripeConnectService.createOnboardingLink(shopId, returnUrl, refreshUrl);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "onboardingUrl", onboardingUrl
-            ));
-        } catch (StripeException e) {
-            log.error("Erreur Stripe lors de la génération du lien d'onboarding", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", "Erreur Stripe: " + e.getMessage()
-            ));
-        } catch (Exception e) {
-            log.error("Erreur lors de la génération du lien d'onboarding", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()
-            ));
-        }
+    @PostMapping("/onboard/{shopId}")
+    public ResponseEntity<Map<String, String>> onboardShop(@PathVariable UUID shopId) {
+        log.info("Starting Stripe onboarding for shop: {}", shopId);
+
+        String onboardingUrl = stripeConnectService.onboardShop(shopId);
+
+        return ResponseEntity.ok(Map.of(
+            "onboarding_url", onboardingUrl,
+            "shop_id", shopId.toString()
+        ));
     }
 
     /**
-     * Vérifier le statut d'un compte Stripe Connect
+     * Endpoint de retour après onboarding réussi.
      */
-    @GetMapping("/shops/{shopId}/status")
-    public ResponseEntity<?> getAccountStatus(@PathVariable UUID shopId) {
-        try {
-            var account = stripeConnectService.getShopStripeAccount(shopId);
-            if (account.isEmpty()) {
-                return ResponseEntity.notFound().build();
-            }
-
-            ShopStripeAccount shopAccount = account.get();
-            return ResponseEntity.ok(Map.of(
-                    "shopId", shopAccount.getShopId(),
-                    "stripeAccountId", shopAccount.getStripeAccountId(),
-                    "onboardingCompleted", shopAccount.getOnboardingCompleted(),
-                    "chargesEnabled", shopAccount.getChargesEnabled(),
-                    "payoutsEnabled", shopAccount.getPayoutsEnabled(),
-                    "canReceivePayments", stripeConnectService.canReceivePayments(shopId)
-            ));
-        } catch (Exception e) {
-            log.error("Erreur lors de la récupération du statut du compte", e);
-            return ResponseEntity.internalServerError().body(Map.of(
-                    "success", false,
-                    "message", "Erreur interne: " + e.getMessage()
-            ));
-        }
+    @GetMapping("/return")
+    public ResponseEntity<Map<String, String>> handleReturn(@RequestParam(required = false) String account) {
+        log.info("Shop onboarding completed for account: {}", account);
+        return ResponseEntity.ok(Map.of("status", "success", "message", "Onboarding completed"));
     }
 
     /**
-     * Endpoint de callback après onboarding Stripe (optionnel)
+     * Endpoint de refresh en cas d'expiration du lien d'onboarding.
      */
-    @PostMapping("/onboarding-callback")
-    public ResponseEntity<?> onboardingCallback(@RequestParam String accountId) {
-        try {
-            stripeConnectService.updateAccountStatus(accountId);
-            return ResponseEntity.ok(Map.of(
-                    "success", true,
-                    "message", "Statut du compte mis à jour"
-            ));
-        } catch (Exception e) {
-            log.error("Erreur lors de la mise à jour du statut après onboarding", e);
-            return ResponseEntity.badRequest().body(Map.of(
-                    "success", false,
-                    "message", e.getMessage()
-            ));
-        }
+    @GetMapping("/reauth")
+    public ResponseEntity<Map<String, String>> handleReauth(@RequestParam(required = false) String account) {
+        log.info("Shop onboarding reauth required for account: {}", account);
+        return ResponseEntity.ok(Map.of("status", "reauth", "message", "Please restart onboarding"));
     }
 }
