@@ -1,6 +1,7 @@
 package com.etna.gpe.ms_payment_api.services;
 
 import com.etna.gpe.ms_payment_api.config.StripeFeeConfig;
+import com.etna.gpe.ms_payment_api.dto.ServiceDto;
 import com.etna.gpe.ms_payment_api.entity.Payment;
 import com.etna.gpe.ms_payment_api.enums.PaymentStatus;
 import com.etna.gpe.ms_payment_api.exceptions.PaymentNotFoundException;
@@ -14,8 +15,6 @@ import com.stripe.model.checkout.Session;
 import com.stripe.net.RequestOptions;
 import com.stripe.param.RefundCreateParams;
 import com.stripe.param.checkout.SessionCreateParams;
-import feign.Headers;
-import io.jsonwebtoken.Header;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
@@ -40,8 +39,11 @@ public class PaymentServiceImpl implements PaymentService {
 
     public static final String AUTHORIZATION = "Authorization";
     public static final String BEARER = "Bearer ";
+    public static final String CALLING_MS_SHOP_API_AT = "Calling ms-shop-api at: {}";
+    public static final String USING_TOKEN_FOR_MS_SHOP_API = "Using token for ms-shop-api: {}";
     public static final String MS_PAYMENT_API = "ms-payment-api";
     public static final String ROLE_ADMIN = "ROLE_ADMIN";
+
     @Value("${stripe.api.key}")
     private String stripeApiKey;
 
@@ -67,58 +69,6 @@ public class PaymentServiceImpl implements PaymentService {
     private final JwtTokenUtil jwtTokenUtil;
 
     /**
-     * DTO pour représenter les informations d'un service.
-     */
-    private static class ServiceDto {
-        private UUID id;
-        private String name;
-        private String description;
-        private double price;
-        private int duration;
-
-        // Getters and setters
-        public UUID getId() {
-            return id;
-        }
-
-        public void setId(UUID id) {
-            this.id = id;
-        }
-
-        public String getName() {
-            return name;
-        }
-
-        public void setName(String name) {
-            this.name = name;
-        }
-
-        public String getDescription() {
-            return description;
-        }
-
-        public void setDescription(String description) {
-            this.description = description;
-        }
-
-        public double getPrice() {
-            return price;
-        }
-
-        public void setPrice(double price) {
-            this.price = price;
-        }
-
-        public int getDuration() {
-            return duration;
-        }
-
-        public void setDuration(int duration) {
-            this.duration = duration;
-        }
-    }
-
-    /**
      * Récupère les détails d'un service par son ID.
      *
      * @param serviceId ID du service
@@ -129,12 +79,12 @@ public class PaymentServiceImpl implements PaymentService {
 
         try {
             String url = shopApiUrl + "/service/" + serviceId;
-            log.debug("Calling ms-shop-api at: {}", url);
+            log.debug(CALLING_MS_SHOP_API_AT, url);
 
             // Ajouter le token JWT pour l'authentification
             String tokenMs = jwtTokenUtil.generateTokenForMsWith(MS_PAYMENT_API, UUID.randomUUID(), List.of(ROLE_ADMIN));
 
-            log.debug("Using token for ms-shop-api: {}", tokenMs);
+            log.debug(USING_TOKEN_FOR_MS_SHOP_API, tokenMs);
 
             // Ajouter le token dans les headers de la requête
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
@@ -172,11 +122,11 @@ public class PaymentServiceImpl implements PaymentService {
 
         try {
             String url = shopApiUrl + "/appointment/" + appointmentId + "/confirm";
-            log.debug("Calling ms-shop-api at: {}", url);
+            log.debug(CALLING_MS_SHOP_API_AT, url);
 
             // Ajouter le token JWT pour l'authentification
-            String tokenMs = jwtTokenUtil.generateTokenForMsWith("ms-payment-api", UUID.randomUUID(), List.of("ROLE_ADMIN"));
-            log.debug("Using token for ms-shop-api: {}", tokenMs);
+            String tokenMs = jwtTokenUtil.generateTokenForMsWith(MS_PAYMENT_API, UUID.randomUUID(), List.of(ROLE_ADMIN));
+            log.debug(USING_TOKEN_FOR_MS_SHOP_API, tokenMs);
 
             // Créer un objet pour la requête POST
             Map<String, Object> requestBody = new HashMap<>();
@@ -419,9 +369,9 @@ public class PaymentServiceImpl implements PaymentService {
         try {
             // Appel HTTP vers ms-shop-api pour récupérer l'account ID Stripe du shop
             String url = shopApiUrl + "/shop/" + shopId + "/stripe-account";
-            log.debug("Calling ms-shop-api at: {}", url);
+            log.debug(CALLING_MS_SHOP_API_AT, url);
 
-            String tokenMs = jwtTokenUtil.generateTokenForMsWith("ms-payment-api", UUID.randomUUID(), List.of("ROLE_ADMIN"));
+            String tokenMs = jwtTokenUtil.generateTokenForMsWith(MS_PAYMENT_API, UUID.randomUUID(), List.of(ROLE_ADMIN));
 
             // Add authorization header with bearer token
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
