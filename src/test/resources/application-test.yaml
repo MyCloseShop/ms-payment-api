@@ -1,3 +1,7 @@
+microservices:
+  shop-api:
+    url: http://localhost:8091/api/ms-shop-api
+
 spring:
   datasource:
     url: jdbc:h2:mem:testdb
@@ -11,13 +15,36 @@ spring:
     hibernate:
       ddl-auto: create-drop
     show-sql: false
-  rabbitmq:
-    host: localhost
-    port: 5672
-    username: guest
-    password: guest
 
-logging:
-  level:
-    com.etna.gpe.mycloseshop.ms_payment_api: DEBUG
-    org.springframework.security: DEBUG
+  # Désactiver complètement RabbitMQ pour les tests
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.autoconfigure.amqp.RabbitAutoConfiguration
+
+# Configuration Stripe pour les tests
+stripe:
+  api:
+    key: sk_test_fake_key_for_testing
+    version: ${STRIPE_API_VERSION:2025-03-31.preview}
+  webhook:
+    secret: whsec_fake_secret_for_testing
+
+# Configuration de l'application pour les tests
+app:
+  base-url: http://localhost:8087/api/ms-payment-api
+
+# Configuration RabbitMQ mockée pour les tests
+rabbitmq:
+  exchange:
+    payment: test.payment.exchange
+    appointment: test.appointment.exchange
+  queue:
+    payment-completed: test.payment.completed.queue
+    payment-refunded: test.payment.refunded.queue
+    appointment-confirmed: test.appointment.confirmed.queue
+    appointment-cancelled: test.appointment.cancelled.queue
+  routing-keys:
+    payment-completed: test.payment.completed
+    payment-refunded: test.payment.refunded
+    appointment-confirmed: test.appointment.confirmed
+    appointment-cancelled: test.appointment.cancelled

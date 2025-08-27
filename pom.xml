@@ -85,6 +85,13 @@
 			<optional>true</optional>
 		</dependency>
 
+		<!-- STRIPE SDK -->
+		<dependency>
+			<groupId>com.stripe</groupId>
+			<artifactId>stripe-java</artifactId>
+			<version>24.16.0</version>
+		</dependency>
+
 		<!-- COMMON-API -->
 		<dependency>
 			<groupId>com.etna.gpe.mycloseshop</groupId>

@@ -1,52 +1,75 @@
 logging:
   level:
     org.springframework.web: INFO
-    com.etna.gpe.mycloseshop.ms_payment_api: INFO
+    com.etna.gpe.ms_payment_api: DEBUG
     com.etna.gpe.mycloseshop.security_api: INFO
     slf4j: INFO
     org.springframework.security: INFO
 
+# Configuration Stripe (Mode TEST par défaut pour développement MVP)
+stripe:
+  # Clé API secrète Stripe
+  api:
+    key: ${STRIPE_SECRET_KEY:sk_test_}
+    version: ${STRIPE_API_VERSION:2025-03-31.preview}
+
+  # Secret du webhook Stripe pour vérifier les signatures
+  webhook:
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_your_webhook_secret}
+    
+  # Configuration des frais de plateforme
+  platform:
+    # Pourcentage de frais prélevé sur chaque transaction (ex: 5.0 pour 5%)
+    fee_percentage: ${STRIPE_PLATFORM_FEE_PERCENTAGE:5.0}
+
+# Configuration de l'application
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8087/api/ms-payment-api}
+
+# Configuration des URLs des microservices
+microservices:
+  shop-api:
+    url: ${MS_SHOP_API_URL:http://localhost:8082/api/ms-shop-api}
+
 rabbitmq:
   exchange:
+    payment: payment.exchange
+    appointment: appointment.exchange
   queue:
+    payment-completed: payment.completed.queue
+    payment-refunded: payment.refunded.queue
+    appointment-confirmed: appointment.confirmed.queue
+    appointment-cancelled: appointment.cancelled.queue
   routing-keys:
+    payment-completed: payment.completed
+    payment-refunded: payment.refunded
+    appointment-confirmed: appointment.confirmed
+    appointment-cancelled: appointment.cancelled
 
 server:
   port: ${SPRING_APP_URL:8087}
   servlet:
     context-path: /api/ms-payment-api
+
 spring:
   application:
     name: 'ms-payment-api'
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3308/db-ms-payment?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
+    url: ${SPRING_DATASOURCE_URL:jdbc:mysql://localhost:3312/db-ms-payment?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=UTC&allowPublicKeyRetrieval=true}
     username: ${SPRING_DATASOURCE_USERNAME:user}
     password: ${SPRING_DATASOURCE_PASSWORD:secret}
-    driverClassName: com.mysql.cj.jdbc.Driver
-  cloud:
-    discovery:
-      enabled: true
-
-  flyway:
-    enabled: true
-    locations: classpath:db/migration
-    validate-on-migrate: true
+    driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
     hibernate:
       ddl-auto: validate
-    show-sql: true
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: true
 
-  rabbitmq:
-    port: ${SPRING_RABBITMQ_PORT:5672}
-    host: ${SPRING_RABBITMQ_HOST:localhost}
-    username: ${SPRING_RABBITMQ_USERNAME:guest}
-    password: ${SPRING_RABBITMQ_PASSWORD:guest}
-
-  main:
-    allow-bean-definition-overriding: true
-springdoc:
-  api-docs:
+  flyway:
     enabled: true
-  swagger-ui:
-    path: /swagger-ui.html
+    baseline-on-migrate: true
+    locations: classpath:db/migration

@@ -1,11 +1,14 @@
 package com.etna.gpe.ms_payment_api;
 
+import com.etna.gpe.ms_payment_api.config.TestRabbitMQConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest(classes = MycloseshopApplication.class)
 @ActiveProfiles("test")
+@Import(TestRabbitMQConfig.class)
 class MycloseshopApplicationTests {
 
 	@Test

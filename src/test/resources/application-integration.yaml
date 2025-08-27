@@ -1,0 +1,42 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:integrationdb
+    username: sa
+    password: password
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+# Configuration Stripe RÉELLE pour tests d'intégration
+stripe:
+  api:
+    key: ${STRIPE_SECRET_KEY:sk_test_}
+  webhook:
+    secret: ${STRIPE_WEBHOOK_SECRET:whsec_your_real_webhook_secret}
+
+# Configuration de l'application
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8087/api/ms-payment-api}
+
+# Configuration RabbitMQ réelle ou embedded pour l'intégration
+rabbitmq:
+  exchange:
+    payment: integration.payment.exchange
+    appointment: integration.appointment.exchange
+  queue:
+    payment-completed: integration.payment.completed.queue
+    payment-refunded: integration.payment.refunded.queue
+    appointment-confirmed: integration.appointment.confirmed.queue
+    appointment-cancelled: integration.appointment.cancelled.queue
+  routing-keys:
+    payment-completed: integration.payment.completed
+    payment-refunded: integration.payment.refunded
+    appointment-confirmed: integration.appointment.confirmed
+    appointment-cancelled: integration.appointment.cancelled
+
+logging:
+  level:
+    com.etna.gpe.ms_payment_api: DEBUG
+    com.stripe: DEBUG
