@@ -20,12 +20,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -112,33 +112,30 @@ public class PaymentServiceImpl implements PaymentService {
      * @param appointmentId ID du rendez-vous
      * @return true si la mise à jour a réussi, false sinon
      */
-    private boolean confirmAppointment(UUID appointmentId) {
+    private boolean paidAppointment(UUID appointmentId) {
         if (appointmentId == null) {
-            log.warn("Cannot confirm appointment: appointmentId is null");
+            log.warn("Cannot set paid appointment: appointmentId is null");
             return false;
         }
 
-        log.info("Confirming appointment: {}", appointmentId);
+        log.info("Set paid appointment: {}", appointmentId);
 
         try {
-            String url = shopApiUrl + "/appointment/" + appointmentId + "/confirm";
+            String url = shopApiUrl + "/paid/" + appointmentId;
             log.debug(CALLING_MS_SHOP_API_AT, url);
 
             // Ajouter le token JWT pour l'authentification
             String tokenMs = jwtTokenUtil.generateTokenForMsWith(MS_PAYMENT_API, UUID.randomUUID(), List.of(ROLE_ADMIN));
             log.debug(USING_TOKEN_FOR_MS_SHOP_API, tokenMs);
 
-            // Créer un objet pour la requête POST
-            Map<String, Object> requestBody = new HashMap<>();
-            requestBody.put("status", "CONFIRMED");
 
             // Ajouter le token dans les headers de la requête
             org.springframework.http.HttpHeaders headers = new org.springframework.http.HttpHeaders();
             headers.set(AUTHORIZATION, BEARER + tokenMs);
             headers.setContentType(org.springframework.http.MediaType.APPLICATION_JSON);
-            org.springframework.http.HttpEntity<Map<String, Object>> requestEntity = new org.springframework.http.HttpEntity<>(requestBody, headers);
+            org.springframework.http.HttpEntity<Map<String, Object>> requestEntity = new org.springframework.http.HttpEntity<>(headers);
 
-            ResponseEntity<Object> response = restTemplate.exchange(url, org.springframework.http.HttpMethod.POST, requestEntity, Object.class);
+            ResponseEntity<Object> response = restTemplate.exchange(url, HttpMethod.PATCH, requestEntity, Object.class);
 
             if (response.getStatusCode().is2xxSuccessful()) {
                 log.info("Appointment confirmed successfully: {}", appointmentId);
@@ -303,7 +300,7 @@ public class PaymentServiceImpl implements PaymentService {
 
         // Confirmer le rendez-vous si présent
         if (payment.getAppointmentId() != null) {
-            boolean appointmentConfirmed = confirmAppointment(payment.getAppointmentId());
+            boolean appointmentConfirmed = paidAppointment(payment.getAppointmentId());
             if (appointmentConfirmed) {
                 log.info("Appointment confirmed for payment: {}, appointment: {}",
                         payment.getId(), payment.getAppointmentId());
