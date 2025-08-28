@@ -121,7 +121,7 @@ public class PaymentServiceImpl implements PaymentService {
         log.info("Set paid appointment: {}", appointmentId);
 
         try {
-            String url = shopApiUrl + "/paid/" + appointmentId;
+            String url = shopApiUrl + "/appointment/paid/" + appointmentId;
             log.debug(CALLING_MS_SHOP_API_AT, url);
 
             // Ajouter le token JWT pour l'authentification
