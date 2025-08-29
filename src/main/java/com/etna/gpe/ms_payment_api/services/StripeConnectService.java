@@ -85,8 +85,8 @@ public class StripeConnectService implements IStripeConnectService {
         try {
             AccountLinkCreateParams linkParams = AccountLinkCreateParams.builder()
                 .setAccount(accountId)
-                .setRefreshUrl(baseUrl + "/stripe/reauth")
-                .setReturnUrl(baseUrl + "/stripe/return")
+                    .setRefreshUrl(baseUrl + "/stripe/connect/reauth")
+                    .setReturnUrl(baseUrl + "/stripe/connect/return")
                 .setType(AccountLinkCreateParams.Type.ACCOUNT_ONBOARDING)
                 .build();
 
