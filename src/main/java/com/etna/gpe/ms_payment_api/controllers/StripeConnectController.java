@@ -5,7 +5,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.Map;
 import java.util.UUID;
@@ -33,7 +38,7 @@ public class StripeConnectController implements IStripeConnectController {
      * @param shopId ID du shop à onboarder
      * @return URL d'onboarding Stripe
      */
-    @PostMapping("/onboard/{shopId}")
+    @RequestMapping(value = "/onboard/{shopId}", method = {RequestMethod.POST, RequestMethod.GET})
     public ResponseEntity<Map<String, String>> onboardShop(@PathVariable UUID shopId) {
         log.info("Starting Stripe onboarding for shop: {}", shopId);
 
